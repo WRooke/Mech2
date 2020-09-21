@@ -10,7 +10,7 @@ task = "A3" ;       %% Task A3(randomized map with two goal) or A4(manually set 
 randomGoal = false;  %% Spawn random goals on map ? 
 mapSet = "map\box.png"; %% set the map manually
 randomPose = false;  %% Random beginning pose of robot
-randomMap = false;   %% Randomize map for A4
+randomMap = true;   %% Randomize map for A4
 
 %%Assigning goal if randomGoal == false
 g1 = [13 6];    % GOAL [x y]
@@ -153,6 +153,7 @@ while runFlag == true
     buffer = arduinoObj.readline;
     if ~isempty(buffer)
         Status = DataLogger(buffer,'RX',pose);
+        disp(buffer)
         switch buffer
             case "CMD_CLOSE"
                 arduinoObj = [];
