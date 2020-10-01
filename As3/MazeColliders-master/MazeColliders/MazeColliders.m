@@ -10,7 +10,7 @@ task = "A3" ;       %% Task A3(randomized map with two goal) or A4(manually set 
 randomGoal = false;  %% Spawn random goals on map ? 
 mapSet = "map\box.png"; %% set the map manually
 randomPose = false;  %% Random beginning pose of robot
-randomMap = true;   %% Randomize map for A4
+randomMap = false;   %% Randomize map for A4
 
 %%Assigning goal if randomGoal == false
 g1 = [13 6];    % GOAL [x y]

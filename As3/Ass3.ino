@@ -62,11 +62,12 @@ volatile uint8_t seconds = 255;
 volatile uint8_t minutes = 255;
 
 // Variables used for distance calculations and sensor readings
-float sensorReadings[71];
+const uint8_t NUMREADINGS = 72;
+float sensorReadings[NUMREADINGS];
 uint16_t sensorVal = 0;
 uint8_t wheelSize = 20;
 float numRevs = 0;
-uint8_t distance = 0;
+float distance = 0.0;
 
 // Menu helper variables
 bool menuUpdate = true;
@@ -77,12 +78,22 @@ volatile bool blocked = false;
 uint16_t sensorRotation = 0;
 String commandString = "";
 float sensorRead = 0;
-uint8_t minIndex = 0;
+
+bool wallFollow = false;
+
+float prevWallDist = 2.0;
+float currWallDist = 0.0;
+float wallAngle = 90.0;
+float wfDistance = 0.5;
+
+uint8_t farCorrections = 0;
+uint8_t nearCorrections = 0;
+
 
 void setup()
 {
   // Set array of sensor readings to zero on startup
-  for(uint8_t x = 0; x < (sizeof(sensorReadings)/sizeof(sensorReadings[0])); x++)
+  for(uint8_t x = 0; x < NUMREADINGS; x++)
   {
     sensorReadings[x] = FLT_MAX;
   }
@@ -186,8 +197,7 @@ void loop()
           // Select, go to Sweep mode
           case SEL_PB:
             lcd.clear();
-            menuState = MD_SWP;            
-            PrintMessage("CMD_START");
+            menuState = MD_SWP;
             break;
 
           case DWN_PB:
@@ -219,11 +229,21 @@ void loop()
       {
         switch (buttonVal)
         {
-          // Select, go to CM mode
-          // Set motor speed to 2, in case it changed somewhere else
           case SEL_PB:
-            lcd.clear();
             menuState = MD_WF;
+            distance = sensorReadings[Sweep()];
+            if (distance < 2.0)
+            {
+              commandString = String("CMD_ACT_LAT_0_" + String(2.0 - distance));
+            }
+            else
+            {
+              commandString = String("CMD_ACT_LAT_1_" + String(distance - 2.0));
+            }
+            PrintMessage(commandString);
+            PrintMessage("CMD_ACT_ROT_1_90");
+            lcd.clear();
+            wallFollow = true;
             break;
 
           case DWN_PB:
@@ -335,35 +355,7 @@ void loop()
           
           // Start rotating
           case UP_PB:
-            sensorRotation = 360;
-            while (sensorRotation > 0)
-            {
-              Serial.println("In while loop");
-              commandString = String("CMD_SEN_ROT_" + String(sensorRotation));
-              PrintMessage(commandString);
-              PrintMessage("CMD_SEN_IR");
-              Serial.println("Gonna wait for input");
-              while (Serial.available() == 0);
-              Serial.print("Data recieved:");
-              sensorRead = Serial.readString().toFloat();
-              Serial.println(sensorRead);
-              if (sensorRead == 0)
-              {
-                sensorReadings[(sensorRotation / 10) - 1] = FLT_MAX;
-              }
-              else
-              {
-                sensorReadings[(sensorRotation / 10) - 1] = sensorRead;
-              }
-
-              sensorRotation -= 10;
-
-            }
-            Serial.println("Out of while loop");
-            minIndex = arrayMin(sensorReadings,sizeof(sensorReadings));
-            PrintMessage("CMD_SEN_ROT_0");
-            commandString = String("CMD_ACT_ROT_0_" + String((minIndex + 1) * 10));
-            PrintMessage(commandString);
+            Sweep();
             break;
 
           default:
@@ -393,12 +385,12 @@ void loop()
             break;
 
           case UP_PB:
-            // Sweep, then maintain 2m distance from wall until up is pressed again
+            wallFollow = false;
             break;
       }
       break;
     
-    // CM Mode with start blinking
+    // Nav Mode
     case MD_NAV:
       // Print CM mode and Start Exit menu
       lcd.setCursor(0, 0);
@@ -424,6 +416,112 @@ void loop()
   // Buttons have been handled and menu has been updated, set to false to ensure they don't get read again until necessary
   buttonRead = false;
   menuUpdate = false;
+
+  if (wallFollow)
+  {
+    FollowWall();
+  }
+
+}
+
+float SerialRead()
+{
+  while (Serial.available() == 0);
+  String inString = Serial.readStringUntil('\r\n');
+  if (inString[0] == 'N')
+  {
+    return FLT_MAX;
+  }
+  else
+  {
+    return inString.toFloat();
+  }
+}
+
+uint8_t Sweep()
+{
+  // uint8_t index = NUMREADINGS;
+  uint8_t minIndex = 0;
+  for (int16_t sensorRotation = 355; sensorRotation >= 0; sensorRotation -=5)
+  {
+    commandString = String("CMD_SEN_ROT_" + String(sensorRotation));
+    PrintMessage(commandString);
+    PrintMessage("CMD_SEN_IR");
+    sensorReadings[(sensorRotation * 2) / 10] = SerialRead();
+    // index--;
+  }
+  minIndex = arrayMin(sensorReadings);
+  PrintMessage("CMD_SEN_ROT_0");
+  commandString = String("CMD_ACT_ROT_0_" + String((minIndex * 10) / 2));
+  PrintMessage(commandString);
+  return minIndex;
+}
+
+void FollowWall()
+{
+  // Check distance from parallel wall
+  PrintMessage("CMD_SEN_ROT_90");
+  PrintMessage("CMD_SEN_IR");
+  currWallDist = SerialRead();
+  Serial.print("current wall distance:");
+  Serial.println(currWallDist);
+  if ((currWallDist - 2.0) > 0.15)
+  {
+
+    PrintMessage("CMD_ACT_ROT_0_90");
+    commandString = String("CMD_ACT_LAT_1_" + String(currWallDist - 2.0));
+    PrintMessage(commandString);
+    PrintMessage("CMD_ACT_ROT_1_90");
+    farCorrections++;
+  }
+  else if ((currWallDist - 2.0) < -0.15)
+  {
+    PrintMessage("CMD_ACT_ROT_0_90");
+    commandString = String("CMD_ACT_LAT_0_" + String(2.0 - currWallDist));
+    PrintMessage(commandString);
+    PrintMessage("CMD_ACT_ROT_1_90");
+    nearCorrections++;
+  }
+  if (farCorrections > 1)
+  {
+    PrintMessage("CMD_ACT_ROT_0_5");
+    farCorrections = 0;
+  }
+  if (nearCorrections > 1)
+  {
+    PrintMessage("CMD_ACT_ROT_1_5");
+    nearCorrections = 0;
+  }
+
+  // Check distance from upcoming wall
+  PrintMessage("CMD_SEN_ROT_0");
+  PrintMessage("CMD_SEN_IR");
+  wfDistance = SerialRead();
+  if (wfDistance == FLT_MAX)
+  {
+    wfDistance = 3.0;
+    commandString = String("CMD_ACT_LAT_1_" + String(wfDistance));
+    PrintMessage(commandString);
+  }
+  else
+  {
+    commandString = String("CMD_ACT_LAT_1_" + String(wfDistance - 2.0));
+    PrintMessage(commandString);
+    PrintMessage("CMD_ACT_ROT_1_90");
+    // prevWallDist = 2.0;
+    // currWallDist = 2.0;
+  }
+  
+  
+
+  // If wall not found, move forward x amount
+
+  // If wall found, move to wall and rotate 90deg
+}
+
+double RadsToDegrees(double radAngle)
+{
+  return radAngle * (180.0 * M_PI);
 }
 
 // Initialised timer 1
@@ -517,16 +615,6 @@ int buttonRound(int checkValue)
   }
 }
 
-// Takes an array, pushes oldest value out, moves all values down and inserts the new value
-void arrayIncrement(uint16_t inArray[], size_t arraySize, uint16_t newValue)
-{
-  for (size_t x = (arraySize / sizeof(inArray[0])); x > 0; x--)
-  {
-    inArray[x] = inArray[x-1];
-  }
-  inArray[0] = newValue;
-}
-
 void ADCInit()
 {
   // Use interval voltage reference
@@ -567,34 +655,23 @@ uint16_t ADCRead(uint8_t channel)
   return ADC;
 }
 
-// Finds average of an array
-uint16_t arrayAverage(uint16_t inArray[], size_t arraySize)
-{
-  // Iterate through array and find sum
-  uint32_t sum = 0;
-  for (size_t x = 0; x <= (arraySize / sizeof(inArray[0])); x++)
-  {    
-    sum += inArray[x];
-  }
-  // Return sum divided by number of elements
-  return (sum / (arraySize / sizeof(inArray[0])));
-}
-
 // Finds index of minimum value in an array
-uint8_t arrayMin(float inArray[], size_t arraySize)
+uint8_t arrayMin(float inArray[])
 {
-  // Iterate through array and find sum
   float min = FLT_MAX;
   uint8_t index = 0;
-  for (size_t x = 0; x <= (arraySize / sizeof(inArray[0])); x++)
-  { 
+  for (uint8_t x = 0; x < NUMREADINGS; x++)
+  {
+    Serial.print("index:");
+    Serial.println(x);
+    Serial.print("value:");
+    Serial.println(inArray[x]);
     if (inArray[x] < min)   
     {
       index = x;
       min = inArray[x];
     }
   }
-  // Return sum divided by number of elements
   return index;
 }
 
