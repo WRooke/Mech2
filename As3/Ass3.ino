@@ -8,23 +8,22 @@
 // Include necessary libraries
 #include <LiquidCrystal.h>
 #include <avr/io.h>
-#include <math.h>
 #include <float.h>
+#include <math.h>
 
 // Define LCD shield button values
 // These are the ideal values read from the ADC when a button is pressed
-const uint16_t STEPS =  4096;
-const uint16_t SEL_PB =  640;
-const uint16_t UP_PB =  100;
-const uint16_t DWN_PB =  257;
-const uint16_t LFT_PB =  410;
-const uint16_t RIT_PB =  0;
-const uint16_t NONE_PB =  1023;
+const uint16_t STEPS = 4096;
+const uint16_t SEL_PB = 640;
+const uint16_t UP_PB = 100;
+const uint16_t DWN_PB = 257;
+const uint16_t LFT_PB = 410;
+const uint16_t RIT_PB = 0;
+const uint16_t NONE_PB = 1023;
 
 // Define range for button value
 // This is used as a +/- value for the ideals above because the readings are inconsistent
-const uint16_t PB_BOUND =  20;
-
+const uint16_t PB_BOUND = 20;
 
 // Define menu modes
 // Used to display and select menus
@@ -40,13 +39,12 @@ const uint8_t MD_SWP = 30;
 const uint8_t MD_WF = 40;
 
 const uint8_t MD_NAV = 50;
+const uint8_t MD_NAV_FIN = 51;
 
 uint8_t menuState = MD_START_CON;
 
-
 // Initialise LCD
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
-
 
 // Initialise values for button checking and debouncing
 uint16_t buttonVal = 1023;
@@ -80,6 +78,7 @@ String commandString = "";
 float sensorRead = 0;
 
 bool wallFollow = false;
+bool nav = false;
 
 float prevWallDist = 2.0;
 float currWallDist = 0.0;
@@ -89,11 +88,10 @@ float wfDistance = 0.5;
 uint8_t farCorrections = 0;
 uint8_t nearCorrections = 0;
 
-
 void setup()
 {
   // Set array of sensor readings to zero on startup
-  for(uint8_t x = 0; x < NUMREADINGS; x++)
+  for (uint8_t x = 0; x < NUMREADINGS; x++)
   {
     sensorReadings[x] = FLT_MAX;
   }
@@ -121,15 +119,14 @@ void setup()
 void loop()
 {
   // Read and round button value
- 
+
   buttonVal = buttonRound(ADCRead(0));
 
-  
   // Check how much time has elapsed since last button read
   // If over 100ms, check if same as previous value
-  // If same, set buttonRead flag, if not, save previous value and do nothing 
+  // If same, set buttonRead flag, if not, save previous value and do nothing
   buttonElapsed = millisecs - debounceTime;
-    
+
   if (buttonElapsed > 100)
   {
     debounceTime = millisecs;
@@ -140,7 +137,7 @@ void loop()
     else
     {
       prevButton = buttonVal;
-    }   
+    }
   }
   // Case switch statement which deals with the various menu states
   switch (menuState)
@@ -150,10 +147,10 @@ void loop()
       // Print minutes, seconds since startup and SN
       lcd.setCursor(0, 0);
       lcd.print("12051342");
-      printHelp("",0,0);
+      printHelp("", 0, 0);
       lcd.setCursor(0, 1);
       printHelp("Main Menu Con", 10, 3);
-      
+
       // If a button has been read, handle it
       if (buttonRead)
       {
@@ -185,10 +182,10 @@ void loop()
       // Pring debug mode and menu string
       lcd.setCursor(0, 0);
       lcd.print("12051342");
-      printHelp("",0,0);
+      printHelp("", 0, 0);
       lcd.setCursor(0, 1);
       printHelp("Main Menu Sweep", 10, 5);
-      
+
       // If a button has been read, handle it
       if (buttonRead)
       {
@@ -204,7 +201,7 @@ void loop()
             menuState = MD_START_WF;
             break;
 
-                    // REMOVE ME BEFORE SUBMISSION
+            // REMOVE ME BEFORE SUBMISSION
           case UP_PB:
             PrintMessage("CMD_CLOSE");
             break;
@@ -220,7 +217,7 @@ void loop()
     case MD_START_WF:
       lcd.setCursor(0, 0);
       lcd.print("12051342");
-      printHelp("",0,0);
+      printHelp("", 0, 0);
       lcd.setCursor(0, 1);
       printHelp("Main Menu WF", 11, 2);
 
@@ -231,7 +228,7 @@ void loop()
         {
           case SEL_PB:
             menuState = MD_WF;
-            distance = sensorReadings[Sweep()];
+            distance = sensorReadings[Sweep(true)];
             if (distance < 2.0)
             {
               commandString = String("CMD_ACT_LAT_0_" + String(2.0 - distance));
@@ -250,7 +247,7 @@ void loop()
             menuState = MD_START_NAV;
             break;
 
-                    // REMOVE ME BEFORE SUBMISSION
+            // REMOVE ME BEFORE SUBMISSION
           case UP_PB:
             PrintMessage("CMD_CLOSE");
             break;
@@ -265,7 +262,7 @@ void loop()
     case MD_START_NAV:
       lcd.setCursor(0, 0);
       lcd.print("12051342");
-      printHelp("",0,0);
+      printHelp("", 0, 0);
       lcd.setCursor(0, 1);
       printHelp("Main Menu Nav", 11, 3);
       // Handle button press
@@ -274,8 +271,9 @@ void loop()
         switch (buttonVal)
         {
           case SEL_PB:
-            lcd.clear();
             menuState = MD_NAV;
+            lcd.clear();
+            nav = true;
             break;
 
           // Left and right navigate menu
@@ -283,7 +281,7 @@ void loop()
             menuState = MD_START_CON;
             break;
 
-                    // REMOVE ME BEFORE SUBMISSION
+            // REMOVE ME BEFORE SUBMISSION
           case UP_PB:
             PrintMessage("CMD_CLOSE");
             break;
@@ -293,7 +291,7 @@ void loop()
         }
       }
       break;
-    
+
     // Control mode
     case MD_CON:
 
@@ -352,10 +350,10 @@ void loop()
             lcd.clear();
             menuState = MD_START_SWP;
             break;
-          
+
           // Start rotating
           case UP_PB:
-            Sweep();
+            Sweep(true);
             break;
 
           default:
@@ -387,9 +385,10 @@ void loop()
           case UP_PB:
             wallFollow = false;
             break;
+        }
       }
       break;
-    
+
     // Nav Mode
     case MD_NAV:
       // Print CM mode and Start Exit menu
@@ -403,16 +402,35 @@ void loop()
       {
         switch (buttonVal)
         {
-          // Select, clear LCD, print CM mode, motor direction and start motor running
-          // Printed here rather than in running mode because it takes too long to print and slows down the motor
           case SEL_PB:
             lcd.clear();
             menuState = MD_START_NAV;
+            nav = false;
             break;
         }
       }
-    }
+      break;
+
+    case MD_NAV_FIN:
+      lcd.setCursor(0, 0);
+      lcd.print("Finished");
+      lcd.setCursor(0, 1);
+      lcd.print("Navigation");
+      // Handle button press
+      if (buttonRead)
+      {
+        switch (buttonVal)
+        {
+          case SEL_PB:
+            lcd.clear();
+            menuState = MD_START_NAV;
+            nav = false;
+            break;
+        }
+      }
+      break;
   }
+
   // Buttons have been handled and menu has been updated, set to false to ensure they don't get read again until necessary
   buttonRead = false;
   menuUpdate = false;
@@ -422,11 +440,115 @@ void loop()
     FollowWall();
   }
 
+  if (nav)
+  {
+    NavToGoal();
+  }
+}
+
+void NavToGoal()
+{
+  PrintMessage("CMD_SEN_PING");
+  float goalDistA = SerialRead();
+  if (goalDistA != 0)
+  {
+    if (goalDistA <= 0.5)
+    {
+      nav = false;
+      menuState = MD_NAV_FIN;
+    }
+    else
+    {
+      Serial.print("Distance to goal:");
+      Serial.println(goalDistA);
+      float goalDistB;
+      PrintMessage("CMD_ACT_LAT_0_0.5");
+      PrintMessage("CMD_SEN_PING");
+      goalDistB = SerialRead();
+      if (goalDistB != 0)
+      {
+        FindGoal(goalDistA, goalDistB);
+      }
+      else
+      {
+        PrintMessage("CMD_ACT_LAT_1_0.5");
+        PrintMessage("CMD_SEN_ROT_90");
+        PrintMessage("CMD_SEN_IR");
+        if (SerialRead() > 0.5)
+        {
+          PrintMessage("CMD_ACT_ROT_0_90");
+          PrintMessage("CMD_ACT_LAT_1_0.5");
+        }
+      }
+    }
+  }
+  else
+  {
+    Serial.println("Goal not found");
+    distance = sensorReadings[Sweep(false)];
+    if (distance < 5)
+    {
+      commandString = String("CMD_ACT_LAT_1_" + String(distance - 0.5));
+      PrintMessage(commandString);
+    }
+    else
+    {
+      PrintMessage("CMD_ACT_LAT_1_4");
+    }
+  }
+}
+
+void FindGoal(float distanceA, float distanceB)
+{
+  if (distanceB > distanceA)
+  {
+    float temp = distanceB;
+    distanceB = distanceA;
+    distanceA = temp;
+  }
+  Serial.print("dista:");
+  Serial.println(distanceA);
+  Serial.print("distb:");
+  Serial.println(distanceB);
+  float x = (pow(distanceA, 2) - pow(distanceB, 2) + pow(0.5, 2)) / (2 * 0.5);
+  float yPos = sqrt(pow(distanceA, 2) - (pow(x, 2)));
+  if (yPos != yPos)
+  {
+    return;
+  }
+  Serial.print("x:");
+  Serial.println(x);
+  Serial.print("y:");
+  Serial.println(yPos);
+  float GoalAngle = RadsToDegrees(atan(yPos/x));
+  float goalRange = sqrt(pow(x, 2) + pow(yPos, 2));
+
+  commandString = String("CMD_ACT_ROT_0_" + String(GoalAngle));
+  PrintMessage(commandString);
+  commandString = String("CMD_ACT_LAT_1_" + String(goalRange));
+  PrintMessage(commandString);
+  PrintMessage("CMD_SEN_PING");
+  float findGoalDist = SerialRead();
+  if ((findGoalDist <= 0.5) && (findGoalDist > 0))
+  {
+    nav = false;
+    menuState = MD_NAV_FIN;
+  }
+  else
+  {
+    commandString = String("CMD_ACT_LAT_0_" + String(goalRange));
+    PrintMessage(commandString);
+    commandString = String("CMD_ACT_ROT_1_" + String(2 * GoalAngle));
+    PrintMessage(commandString);
+    commandString = String("CMD_ACT_LAT_1_" + String(goalRange));
+    PrintMessage(commandString);
+  }
 }
 
 float SerialRead()
 {
-  while (Serial.available() == 0);
+  while (Serial.available() == 0)
+    ;
   String inString = Serial.readStringUntil('\r\n');
   if (inString[0] == 'N')
   {
@@ -438,23 +560,29 @@ float SerialRead()
   }
 }
 
-uint8_t Sweep()
+uint8_t Sweep(bool min)
 {
   // uint8_t index = NUMREADINGS;
-  uint8_t minIndex = 0;
-  for (int16_t sensorRotation = 355; sensorRotation >= 0; sensorRotation -=5)
+  uint8_t rotIndex = 0;
+  for (int16_t sensorRotation = 355; sensorRotation >= 0; sensorRotation -= 5)
   {
     commandString = String("CMD_SEN_ROT_" + String(sensorRotation));
     PrintMessage(commandString);
     PrintMessage("CMD_SEN_IR");
     sensorReadings[(sensorRotation * 2) / 10] = SerialRead();
-    // index--;
   }
-  minIndex = arrayMin(sensorReadings);
+  if (min)
+  {
+    rotIndex = arrayMin(sensorReadings);
+  }
+  else
+  {
+    rotIndex = arrayMax(sensorReadings);
+  }
   PrintMessage("CMD_SEN_ROT_0");
-  commandString = String("CMD_ACT_ROT_0_" + String((minIndex * 10) / 2));
+  commandString = String("CMD_ACT_ROT_0_" + String((rotIndex * 10) / 2));
   PrintMessage(commandString);
-  return minIndex;
+  return rotIndex;
 }
 
 void FollowWall()
@@ -511,8 +639,6 @@ void FollowWall()
     // prevWallDist = 2.0;
     // currWallDist = 2.0;
   }
-  
-  
 
   // If wall not found, move forward x amount
 
@@ -521,7 +647,7 @@ void FollowWall()
 
 double RadsToDegrees(double radAngle)
 {
-  return radAngle * (180.0 * M_PI);
+  return radAngle * (180.0 / M_PI);
 }
 
 // Initialised timer 1
@@ -649,7 +775,8 @@ uint16_t ADCRead(uint8_t channel)
   ADCSRA |= (1 << ADSC);
 
   // Do nothing while reading
-  while ((ADCSRA & (1 << ADSC)));
+  while ((ADCSRA & (1 << ADSC)))
+    ;
 
   // Return read ADC value
   return ADC;
@@ -662,14 +789,25 @@ uint8_t arrayMin(float inArray[])
   uint8_t index = 0;
   for (uint8_t x = 0; x < NUMREADINGS; x++)
   {
-    Serial.print("index:");
-    Serial.println(x);
-    Serial.print("value:");
-    Serial.println(inArray[x]);
-    if (inArray[x] < min)   
+    if (inArray[x] < min)
     {
       index = x;
       min = inArray[x];
+    }
+  }
+  return index;
+}
+
+uint8_t arrayMax(float inArray[])
+{
+  float max = 0;
+  uint8_t index = 0;
+  for (uint8_t x = NUMREADINGS; x > 0; x--)
+  {
+    if (inArray[x] > max)
+    {
+      index = x;
+      max = inArray[x];
     }
   }
   return index;
