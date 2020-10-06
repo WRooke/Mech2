@@ -1,8 +1,8 @@
 /*
-  MX2 Assignment 2
+  MX2 Assignment 3
   Written by W Rooke
   SN: 12051342
-  Date 2/9/2020
+  Date 6/10/2020
 */
 
 // Include necessary libraries
@@ -62,35 +62,30 @@ volatile uint8_t minutes = 255;
 // Variables used for distance calculations and sensor readings
 const uint8_t NUMREADINGS = 72;
 float sensorReadings[NUMREADINGS];
-uint16_t sensorVal = 0;
-uint8_t wheelSize = 20;
-float numRevs = 0;
 float distance = 0.0;
+uint16_t sensorRotation = 0;
 
-// Menu helper variables
-bool menuUpdate = true;
-uint16_t menuElapsed = 0;
-uint16_t menuTime = 0;
+// Menu helper variable
 volatile bool blocked = false;
 
-uint16_t sensorRotation = 0;
+// String variable used for sending commands
 String commandString = "";
-float sensorRead = 0;
 
+// Wall follow and navigation mode booleans
 bool wallFollow = false;
 bool nav = false;
 
+// Variables for tracking wall follow distances and angles
 float prevWallDist = 2.0;
 float currWallDist = 0.0;
 float wallAngle = 90.0;
 float wfDistance = 0.5;
-
 uint8_t farCorrections = 0;
 uint8_t nearCorrections = 0;
 
 void setup()
 {
-  // Set array of sensor readings to zero on startup
+  // Set array of sensor readings to max value on startup
   for (uint8_t x = 0; x < NUMREADINGS; x++)
   {
     sensorReadings[x] = FLT_MAX;
@@ -99,7 +94,9 @@ void setup()
   // Start LCD
   lcd.begin(16, 2);
 
+  // Init ADC
   ADCInit();
+
   // Initialise timer 1
   timer1Init();
 
@@ -110,7 +107,10 @@ void setup()
   OCR2A = 250;
   TIMSK2 = (1 << OCIE2A);
 
+  // Start serial
   Serial.begin(9600);
+
+  // Send start command to sim
   PrintMessage("CMD_START");
   // Enable interrupts
   sei();
@@ -119,7 +119,6 @@ void setup()
 void loop()
 {
   // Read and round button value
-
   buttonVal = buttonRound(ADCRead(0));
 
   // Check how much time has elapsed since last button read
@@ -139,12 +138,13 @@ void loop()
       prevButton = buttonVal;
     }
   }
+
   // Case switch statement which deals with the various menu states
   switch (menuState)
   {
-    // Start up mode
+    // Main menu with control mode flashing
     case MD_START_CON:
-      // Print minutes, seconds since startup and SN
+      // Print SN and flash con mode
       lcd.setCursor(0, 0);
       lcd.print("12051342");
       printHelp("", 0, 0);
@@ -156,19 +156,15 @@ void loop()
       {
         switch (buttonVal)
         {
-
+          // Select goes to con mode
           case SEL_PB:
             lcd.clear();
             menuState = MD_CON;
             break;
 
+          // Down cycles menu
           case DWN_PB:
             menuState = MD_START_SWP;
-            break;
-
-          // REMOVE ME BEFORE SUBMISSION
-          case UP_PB:
-            PrintMessage("CMD_CLOSE");
             break;
 
           default:
@@ -177,9 +173,9 @@ void loop()
       }
       break;
 
-    // Debug mode with IR mode blinking
+    // Main menu with sweep mode flashing
     case MD_START_SWP:
-      // Pring debug mode and menu string
+      // Pring SN and flash sweep mode
       lcd.setCursor(0, 0);
       lcd.print("12051342");
       printHelp("", 0, 0);
@@ -197,13 +193,9 @@ void loop()
             menuState = MD_SWP;
             break;
 
+          // Down, cycle through menu
           case DWN_PB:
             menuState = MD_START_WF;
-            break;
-
-            // REMOVE ME BEFORE SUBMISSION
-          case UP_PB:
-            PrintMessage("CMD_CLOSE");
             break;
 
           // Anything else, do nothing
@@ -213,13 +205,13 @@ void loop()
       }
       break;
 
-    // Debug mode with CM flashing
+    // Main menu with WF flashing
     case MD_START_WF:
       lcd.setCursor(0, 0);
       lcd.print("12051342");
       printHelp("", 0, 0);
       lcd.setCursor(0, 1);
-      printHelp("Main Menu WF", 11, 2);
+      printHelp("Main Menu WF", 10, 2);
 
       // Handle button press
       if (buttonRead)
@@ -227,6 +219,8 @@ void loop()
         switch (buttonVal)
         {
           case SEL_PB:
+            // Select, start wall follow procedure
+            // Update menu, then sweep and adjust for 2m gap, then begin following wall
             menuState = MD_WF;
             distance = sensorReadings[Sweep(true)];
             if (distance < 2.0)
@@ -243,13 +237,9 @@ void loop()
             wallFollow = true;
             break;
 
+          // Down, cycle menu
           case DWN_PB:
             menuState = MD_START_NAV;
-            break;
-
-            // REMOVE ME BEFORE SUBMISSION
-          case UP_PB:
-            PrintMessage("CMD_CLOSE");
             break;
 
           default:
@@ -264,26 +254,22 @@ void loop()
       lcd.print("12051342");
       printHelp("", 0, 0);
       lcd.setCursor(0, 1);
-      printHelp("Main Menu Nav", 11, 3);
+      printHelp("Main Menu Nav", 10, 3);
       // Handle button press
       if (buttonRead)
       {
         switch (buttonVal)
         {
+          // Select, start navigating to goal
           case SEL_PB:
             menuState = MD_NAV;
             lcd.clear();
             nav = true;
             break;
 
-          // Left and right navigate menu
+          // Down, navigate menu
           case DWN_PB:
             menuState = MD_START_CON;
-            break;
-
-            // REMOVE ME BEFORE SUBMISSION
-          case UP_PB:
-            PrintMessage("CMD_CLOSE");
             break;
 
           default:
@@ -310,7 +296,7 @@ void loop()
             menuState = MD_START_CON;
             break;
 
-          // Rotate bot
+          // Left and right, rotate bot
           case LFT_PB:
             PrintMessage("CMD_ACT_ROT_0_5");
             break;
@@ -319,6 +305,7 @@ void loop()
             PrintMessage("CMD_ACT_ROT_1_5");
             break;
 
+          // Up and down, move backward and forward
           case UP_PB:
             PrintMessage("CMD_ACT_LAT_1_0.5");
             break;
@@ -351,7 +338,7 @@ void loop()
             menuState = MD_START_SWP;
             break;
 
-          // Start rotating
+          // Up, sweep
           case UP_PB:
             Sweep(true);
             break;
@@ -373,15 +360,16 @@ void loop()
       // Handle button press
       if (buttonRead)
       {
-        // Select, exit to debug mode
         switch (buttonVal)
         {
-          // Select returns to start up mode
+          // Select returns to main menu
           case SEL_PB:
             lcd.clear();
             menuState = MD_START_WF;
+            wallFollow = false;
             break;
-
+          
+          // Up, stop following wall
           case UP_PB:
             wallFollow = false;
             break;
@@ -391,7 +379,6 @@ void loop()
 
     // Nav Mode
     case MD_NAV:
-      // Print CM mode and Start Exit menu
       lcd.setCursor(0, 0);
       lcd.print("12051342");
       lcd.setCursor(0, 1);
@@ -402,6 +389,7 @@ void loop()
       {
         switch (buttonVal)
         {
+          // Select, stop navigating and return to main menu
           case SEL_PB:
             lcd.clear();
             menuState = MD_START_NAV;
@@ -411,6 +399,7 @@ void loop()
       }
       break;
 
+    // Navigation finished mode
     case MD_NAV_FIN:
       lcd.setCursor(0, 0);
       lcd.print("Finished");
@@ -421,6 +410,7 @@ void loop()
       {
         switch (buttonVal)
         {
+          // Select returns to main menu
           case SEL_PB:
             lcd.clear();
             menuState = MD_START_NAV;
@@ -433,42 +423,55 @@ void loop()
 
   // Buttons have been handled and menu has been updated, set to false to ensure they don't get read again until necessary
   buttonRead = false;
-  menuUpdate = false;
 
+  // If bot is meant to follow wall, follow wall
   if (wallFollow)
   {
     FollowWall();
   }
 
+  // If bot is meant to nav to goal, nav to goal
   if (nav)
   {
     NavToGoal();
   }
 }
 
+
+// Navigates around the map semi-randomly and pings for goal distance
+// When goal is within range, find it
 void NavToGoal()
 {
+  // Ping distance to goal
   PrintMessage("CMD_SEN_PING");
   float goalDistA = SerialRead();
+
+  // If the goal is within range, search for it
   if (goalDistA != 0)
   {
+    // If the goal is within 0.5m, consider the goal found and stop navigating
     if (goalDistA <= 0.5)
     {
       nav = false;
       menuState = MD_NAV_FIN;
     }
+
+    // If goal is not within 0.5m, move back 0.5m and take new distance reading
     else
     {
-      Serial.print("Distance to goal:");
-      Serial.println(goalDistA);
       float goalDistB;
       PrintMessage("CMD_ACT_LAT_0_0.5");
       PrintMessage("CMD_SEN_PING");
       goalDistB = SerialRead();
+
+      // If both goal readings are within range, execute FindGoal
       if (goalDistB != 0)
       {
         FindGoal(goalDistA, goalDistB);
       }
+
+      // If second goal reading is not within range, move forward 0.5m, rotate 90deg and take IR measurement
+      // If there's nothing within 0.5m move to that spot. The function will run again at this new point and will hopefully find the goal
       else
       {
         PrintMessage("CMD_ACT_LAT_1_0.5");
@@ -482,9 +485,11 @@ void NavToGoal()
       }
     }
   }
+  
+  // If the goal is not within range, sweep for largest distance and move towards that
+  // Provides a semi-random way of navigating the map
   else
   {
-    Serial.println("Goal not found");
     distance = sensorReadings[Sweep(false)];
     if (distance < 5)
     {
@@ -498,35 +503,42 @@ void NavToGoal()
   }
 }
 
+// Function for finding bearing and distance of goal from 2 distance readings
+// Used trilateration to find the goal
 void FindGoal(float distanceA, float distanceB)
 {
+  // Ensure distanceA is always greater than distanceB
+  // Helped with some weird angle NaN errors
   if (distanceB > distanceA)
   {
     float temp = distanceB;
     distanceB = distanceA;
     distanceA = temp;
   }
-  Serial.print("dista:");
-  Serial.println(distanceA);
-  Serial.print("distb:");
-  Serial.println(distanceB);
+
+  // Find X and Y coordinates
+  // Formulae from https://en.wikipedia.org/wiki/True-range_multilateration#Two_Cartesian_dimensions,_two_measured_slant_ranges_(Trilateration)
+  // This method gives two "points of interest" (POIs) at (x,y) and (x,-y) so both must be checked
   float x = (pow(distanceA, 2) - pow(distanceB, 2) + pow(0.5, 2)) / (2 * 0.5);
-  float yPos = sqrt(pow(distanceA, 2) - (pow(x, 2)));
-  if (yPos != yPos)
+  float y = sqrt(pow(distanceA, 2) - (pow(x, 2)));
+  
+  // If y is NaN, abort function to avoid crashes
+  if (y != y)
   {
     return;
   }
-  Serial.print("x:");
-  Serial.println(x);
-  Serial.print("y:");
-  Serial.println(yPos);
-  float GoalAngle = RadsToDegrees(atan(yPos/x));
-  float goalRange = sqrt(pow(x, 2) + pow(yPos, 2));
 
+  // Find bearing and distance of goal using pythagorus
+  float GoalAngle = RadsToDegrees(atan(y/x));
+  float goalRange = sqrt(pow(x, 2) + pow(y, 2));
+
+  // Rotate to first POI and move to it
   commandString = String("CMD_ACT_ROT_0_" + String(GoalAngle));
   PrintMessage(commandString);
   commandString = String("CMD_ACT_LAT_1_" + String(goalRange));
   PrintMessage(commandString);
+
+  // Ping goal distance, if it isn't 0 and within 0.5m, consider it found and stop navigating
   PrintMessage("CMD_SEN_PING");
   float findGoalDist = SerialRead();
   if ((findGoalDist <= 0.5) && (findGoalDist > 0))
@@ -534,6 +546,9 @@ void FindGoal(float distanceA, float distanceB)
     nav = false;
     menuState = MD_NAV_FIN;
   }
+
+  // If the goal was not at the first POI, check the second by moving back to the initial point,
+  // rotating 2x the initial angle in the opposite direction, and moving towards the second POI
   else
   {
     commandString = String("CMD_ACT_LAT_0_" + String(goalRange));
@@ -542,28 +557,47 @@ void FindGoal(float distanceA, float distanceB)
     PrintMessage(commandString);
     commandString = String("CMD_ACT_LAT_1_" + String(goalRange));
     PrintMessage(commandString);
+
+    // Ping goal distance, if it isn't 0 and within 0.5m, consider it found and stop navigating
+    PrintMessage("CMD_SEN_PING");
+    findGoalDist = SerialRead();
+    if ((findGoalDist <= 0.5) && (findGoalDist > 0))
+    {
+      nav = false;
+      menuState = MD_NAV_FIN;
+    }
   }
 }
 
+// Reads from the serial port and puts the read value into float form
 float SerialRead()
 {
-  while (Serial.available() == 0)
-    ;
+  // Wait until there is data available
+  while (Serial.available() == 0);
+
+  // Read string until terminator carriage return and newline are found
   String inString = Serial.readStringUntil('\r\n');
+
+  // If the string starts with an N, its a NAN and should be considered the largest number
   if (inString[0] == 'N')
   {
     return FLT_MAX;
   }
+
+  // If not NaN, return the float value
   else
   {
     return inString.toFloat();
   }
 }
 
+// Sweeps for distance readings and rotate to desired distance
+// Takes bool to check for minimum or maximum distance, returns uint8_t of the distance index
 uint8_t Sweep(bool min)
 {
-  // uint8_t index = NUMREADINGS;
   uint8_t rotIndex = 0;
+
+  // Sweep 360deg in 5deg intervals and read distances into sensorReadings array
   for (int16_t sensorRotation = 355; sensorRotation >= 0; sensorRotation -= 5)
   {
     commandString = String("CMD_SEN_ROT_" + String(sensorRotation));
@@ -571,50 +605,69 @@ uint8_t Sweep(bool min)
     PrintMessage("CMD_SEN_IR");
     sensorReadings[(sensorRotation * 2) / 10] = SerialRead();
   }
+
+  // If looking for minimum distance, call arrayMin to find it
   if (min)
   {
     rotIndex = arrayMin(sensorReadings);
   }
+
+  // If looking for maximum distance, call arrayMax to find it
   else
   {
     rotIndex = arrayMax(sensorReadings);
   }
+
+  // Rotate sensor to forward position, then rotate bot to required bearing for distance
   PrintMessage("CMD_SEN_ROT_0");
   commandString = String("CMD_ACT_ROT_0_" + String((rotIndex * 10) / 2));
   PrintMessage(commandString);
+
+  // Return the index of the min/max distance
   return rotIndex;
 }
 
+// Function to check distance, adjust and move along closest wall
 void FollowWall()
 {
   // Check distance from parallel wall
   PrintMessage("CMD_SEN_ROT_90");
   PrintMessage("CMD_SEN_IR");
   currWallDist = SerialRead();
-  Serial.print("current wall distance:");
-  Serial.println(currWallDist);
+
+  // If robot is further out than 2m (+0.15m buffer, otherwise it just adjusts every time)
   if ((currWallDist - 2.0) > 0.15)
   {
-
+    // Rotate towards wall, move to 2m distance and rotate to parallel
     PrintMessage("CMD_ACT_ROT_0_90");
     commandString = String("CMD_ACT_LAT_1_" + String(currWallDist - 2.0));
     PrintMessage(commandString);
     PrintMessage("CMD_ACT_ROT_1_90");
+
+    // Increment farCorrections, used to adjust angle
     farCorrections++;
   }
+  // If robot is closer than 2m
   else if ((currWallDist - 2.0) < -0.15)
   {
+    // Rotate towards wall, move to 2m distance and rotate to parallel
     PrintMessage("CMD_ACT_ROT_0_90");
     commandString = String("CMD_ACT_LAT_0_" + String(2.0 - currWallDist));
     PrintMessage(commandString);
     PrintMessage("CMD_ACT_ROT_1_90");
+
+    // Increment farCorrections, used to adjust angle
     nearCorrections++;
   }
+
+  // If the robot is tracking to move away from the wall, adjust 5deg inwards and reset correction counter
   if (farCorrections > 1)
   {
     PrintMessage("CMD_ACT_ROT_0_5");
     farCorrections = 0;
   }
+
+  // If the robot is tracking to move toward the wall, adjust 5deg outwards and reset correction counter
   if (nearCorrections > 1)
   {
     PrintMessage("CMD_ACT_ROT_1_5");
@@ -625,26 +678,25 @@ void FollowWall()
   PrintMessage("CMD_SEN_ROT_0");
   PrintMessage("CMD_SEN_IR");
   wfDistance = SerialRead();
+
+  // If distance is maxed, move 3m forward
   if (wfDistance == FLT_MAX)
   {
     wfDistance = 3.0;
     commandString = String("CMD_ACT_LAT_1_" + String(wfDistance));
     PrintMessage(commandString);
   }
+
+  // otherwise move to be 2m out from upcoming wall
   else
   {
     commandString = String("CMD_ACT_LAT_1_" + String(wfDistance - 2.0));
     PrintMessage(commandString);
     PrintMessage("CMD_ACT_ROT_1_90");
-    // prevWallDist = 2.0;
-    // currWallDist = 2.0;
   }
-
-  // If wall not found, move forward x amount
-
-  // If wall found, move to wall and rotate 90deg
 }
 
+// Converts radians to degrees
 double RadsToDegrees(double radAngle)
 {
   return radAngle * (180.0 / M_PI);
@@ -741,6 +793,7 @@ int buttonRound(int checkValue)
   }
 }
 
+// Initialise ADC
 void ADCInit()
 {
   // Use interval voltage reference
@@ -785,6 +838,7 @@ uint16_t ADCRead(uint8_t channel)
 // Finds index of minimum value in an array
 uint8_t arrayMin(float inArray[])
 {
+  // Iterate through array and find minimum value
   float min = FLT_MAX;
   uint8_t index = 0;
   for (uint8_t x = 0; x < NUMREADINGS; x++)
@@ -795,11 +849,14 @@ uint8_t arrayMin(float inArray[])
       min = inArray[x];
     }
   }
+  // Return index of minimum value
   return index;
 }
 
+// Finds index of max value in an array
 uint8_t arrayMax(float inArray[])
 {
+  // Iterate through array and find max value
   float max = 0;
   uint8_t index = 0;
   for (uint8_t x = NUMREADINGS; x > 0; x--)
@@ -810,9 +867,11 @@ uint8_t arrayMax(float inArray[])
       max = inArray[x];
     }
   }
+  // Return index of max value
   return index;
 }
 
+// Outputs serial command followed by terminators for MATLAB reading
 void PrintMessage(String message)
 {
   Serial.print(message);
@@ -840,6 +899,7 @@ ISR(TIMER1_COMPA_vect)
   blocked = !blocked;
 }
 
+// Timer 2 ISR, runs every 1ms
 ISR(TIMER2_COMPA_vect)
 {
   // Increment millisecond count
