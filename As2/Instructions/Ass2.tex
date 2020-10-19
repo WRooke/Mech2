@@ -1,0 +1,78 @@
+\documentclass[]{article}
+\usepackage{titlesec}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{cleveref}
+\usepackage{float}
+\usepackage{siunitx}
+\usepackage{fancyhdr}
+\usepackage[left = 1.5cm, right = 1.5cm, top = 2cm, bottom = 2cm]{geometry}
+\usepackage[export]{adjustbox}
+\pagestyle{fancy}
+
+\lfoot{William James Rooke}
+\cfoot{12051342}
+\rfoot{Page \thepage}
+\lhead{}
+\chead{}
+\rhead{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0.5pt}
+
+\definecolor{orange}{rgb}{1,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+
+\lstset{frame=tb,
+	language=C,
+	aboveskip=3mm,
+	belowskip=3mm,
+	showstringspaces=false,
+	columns=flexible,
+	numbers=none,
+	numberstyle=\tiny\color{gray},
+	basicstyle=\footnotesize\ttfamily,
+	keywordstyle=\bfseries\color{green},
+	commentstyle=\itshape\color{mauve},
+	identifierstyle=\color{blue},
+	stringstyle=\color{orange},
+	breaklines=false,
+	breakatwhitespace=true,
+	tabsize=2,
+	frame=none,
+	xleftmargin=1cm,
+	captionpos=b
+}
+
+%\hypersetup{pdfborder={0 0 0}}
+\sisetup{scientific-notation=engineering}
+
+
+\begin{document}
+	\input{TitlePage}
+	\section{Instructions}
+		LCD Shield V1.1 was used in developing this assignment.
+		\begin{table}[H]
+			\centering
+			\begin{tabular}{|l|l|}
+				\hline
+				\textbf{Peripheral Pin} & \textbf{Arduino Shield Pin} \\ \hline
+				Stepper motor driver IN1 & D13 \\ \hline
+				Stepper motor driver IN2 & D12 \\ \hline
+				Stepper motor driver IN3 & D11 \\ \hline
+				Stepper motor driver IN2 & D3 \\ \hline
+				Stepper motor driver 5V & VCC \\ \hline
+				Stepper motor driver GND & GND \\ \hline
+				IR Sensor VCC & Analog Channel 2 5V \\ \hline
+				IR Sensor $V_o$ & Analog Channel 2 S \\ \hline
+				IR Sensor GND & Analog Channel 2 GND \\ \hline
+			\end{tabular}
+		\end{table}
+	\section{Code}
+	\lstinputlisting{"Ass2.ino"}
+\end{document}          

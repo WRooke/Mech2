@@ -1,0 +1,5 @@
+{
+    "board": "arduino:avr:uno",
+    "sketch": "Exercise_2_Motor.ino",
+    "port": "COM4"
+}

@@ -174,8 +174,7 @@ void loop()
       lcd.print(minutes);
       lcd.print(":");
       lcd.print(seconds);
-      lcd.print(" ");
-      // printHelp("",0,0);
+      printHelp("",0,0);
       lcd.setCursor(0, 1);
       printHelp("12051342", 0, 0);
       
@@ -372,6 +371,8 @@ void loop()
           case SEL_PB:
             lcd.clear();
             menuState = MD_START;
+            debugSel = false;
+            FSMState = FSM_0Cor;
             break;
           
           // Left and right navigate menu

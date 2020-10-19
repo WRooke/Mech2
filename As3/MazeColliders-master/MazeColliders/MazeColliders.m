@@ -8,15 +8,15 @@ SerialPort = "COM4"; %% Change to the port connected to the Arduino
 BaudRate = 9600;   %% Communication baud rate
 task = "A3" ;       %% Task A3(randomized map with two goal) or A4(manually set map with three goals)
 randomGoal = false;  %% Spawn random goals on map ? 
-mapSet = "map\box.png"; %% set the map manually
+mapSet = "map\map4_2.png"; %% set the map manually
 randomPose = false;  %% Random beginning pose of robot
 randomMap = false;   %% Randomize map for A4
 
 %%Assigning goal if randomGoal == false
-g1 = [13 6];    % GOAL [x y]
+g1 = [17 9];    % GOAL [x y]
 g2 = [15 4];    % GOAL [x y]
 %%Assigning Pose if randomPose == false
-Pose = [9 7 15];    %Pose [x y theta]
+Pose = [2 4 0];    %Pose [x y theta]
 %% Do not Modify
 
 switch task
@@ -225,6 +225,14 @@ while runFlag == true
                                     attachLidarSensor(viz,lidar);
                                     ranges = lidar(pose);
                                     viz(pose,ranges);
+                                    hold on
+                                    if gSwitch==0
+                                        g1_h = plot(g(1).x,g(1).y,'color','b','marker','.','markersize',30);
+                                        g2_h = plot(g(2).x,g(2).y,'color','r','marker','*','markersize',10);
+                                    elseif gSwitch==1
+                                        g2_h = plot(g(2).x,g(2).y,'color','r','marker','*','markersize',10);
+                                    end
+                                    hold off
                                 case "CHECK"            % CMD_SEN_CHECK - This will return the current rotation on the sensor rotation 0-360
                                     serialWrite(arduinoObj,sensorAngle);
                                 case "VEL"              % CMD_SEN_VEL - Return current Velocity of the robot

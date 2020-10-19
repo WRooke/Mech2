@@ -802,7 +802,7 @@ void ADCInit()
   // Set 8-bit resolution
   // ADMUX |= (1 << ADLAR);
 
-  // 128 prescale for 16Mhz (maybe change this, I dunno what the fuck it means)
+  // 128 prescale for 16Mhz
   ADCSRA |= (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
 
   // Enable the ADC

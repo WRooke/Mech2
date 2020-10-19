@@ -1,0 +1,64 @@
+\documentclass[]{article}
+\usepackage{titlesec}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{cleveref}
+\usepackage{float}
+\usepackage{siunitx}
+\usepackage{fancyhdr}
+\usepackage[left = 1.5cm, right = 1.5cm, top = 2cm, bottom = 2cm]{geometry}
+\usepackage[export]{adjustbox}
+\pagestyle{fancy}
+
+\lfoot{William James Rooke}
+\cfoot{12051342}
+\rfoot{Page \thepage}
+\lhead{}
+\chead{}
+\rhead{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0.5pt}
+
+\definecolor{orange}{rgb}{1,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+
+\lstset{frame=tb,
+	language=C,
+	aboveskip=3mm,
+	belowskip=3mm,
+	showstringspaces=false,
+	columns=flexible,
+	numbers=none,
+	numberstyle=\tiny\color{gray},
+	basicstyle=\footnotesize\ttfamily,
+	keywordstyle=\bfseries\color{green},
+	commentstyle=\itshape\color{mauve},
+	identifierstyle=\color{blue},
+	stringstyle=\color{orange},
+	breaklines=false,
+	breakatwhitespace=true,
+	tabsize=2,
+	frame=none,
+	xleftmargin=1cm,
+	captionpos=b
+}
+
+%\hypersetup{pdfborder={0 0 0}}
+\sisetup{scientific-notation=engineering}
+
+
+\begin{document}
+	\input{TitlePage}
+	\section{Instructions}
+		LCD Shield V1.1 was used in developing this assignment. When in WallFollow or Navigation modes, the desired button must be held down for a period of time to register the input.\\
+		Baud rate: 9600\\
+		Line ending: `\textbackslash r\textbackslash n' as in demo code.
+	\section{Code}
+	\lstinputlisting{"Ass3.ino"}
+\end{document}          
