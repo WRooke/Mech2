@@ -18,13 +18,12 @@ typedef struct pose{
   uint16_t heading;
 } Pose;
 
-typedef struct wavenode{
+
+typedef struct pathnode{
   uint8_t x;
   uint8_t y;
-  uint16_t value;
-} WaveNode;
-
-
+  struct pathnode* next;
+}PathNode;
 
 // Define LCD shield button values
 // These are the ideal values read from the ADC when a button is pressed
@@ -44,7 +43,7 @@ const uint16_t PB_BOUND = 20;
 
 // Define menu modes
 // Used to display and select menus
-const uint8_t MD_START_CON = 10;
+const uint8_t MD_START = 10;
 const uint8_t MD_START_SWP = 11;
 const uint8_t MD_START_WF = 12;
 const uint8_t MD_START_NAV = 13;
@@ -53,25 +52,21 @@ const uint8_t MD_CON = 20;
 
 const uint8_t MD_SWP = 30;
 
-const uint8_t MD_WF = 40;
+const uint8_t MD_GO = 40;
 
 const uint8_t MD_NAV = 50;
 const uint8_t MD_NAV_FIN = 51;
 
-const uint8_t OCCUPIED = 0;
-const uint8_t EXPLORED = 1;
-const uint8_t UNEXPLORED = 2;
+const uint8_t OCCUPIED = 255;
+const uint8_t PLACEHOLDER = 200;
 
 const uint16_t NTH = 0;
-const uint16_t NTHEST = 45;
 const uint16_t EST = 90;
-const uint16_t STHEST = 135;
 const uint16_t STH = 180;
-const uint16_t STHWST = 225;
 const uint16_t WST = 270;
-const uint16_t NTHWST = 315;
 
-uint8_t menuState = MD_START_CON;
+
+uint8_t menuState = MD_START;
 
 // Initialise LCD
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
@@ -95,55 +90,55 @@ volatile bool blocked = false;
 // String variable used for sending commands
 String commandString = "";
 
-const bool occupancyGrid[GRIDSIZE][GRIDSIZE] PROGMEM = {
-  {true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true},
-  {true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, true},
-  {true, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, true, false, false, true},
-  {true, false, false, false, false, false, false, false, false, false, false, true, false, false, false, true, true, false, false, true},
-  {true, false, false, false, false, false, false, false, true, true, true, true, false, false, false, false, true, false, false, true},
-  {true, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, false, true},
-  {true, true, true, true, true, true, false, false, false, false, false, true, false, false, true, true, true, true, true, true},
-  {true, false, false, false, false, true, false, false, false, false, false, true, false, false, false, false, false, false, false, true},
-  {true, false, false, false, false, true, false, false, true, false, false, true, false, false, false, false, false, false, false, true},
-  {true, false, false, false, false, true, false, false, true, false, false, true, false, false, false, false, false, false, false, true},
-  {true, false, false, false, false, false, false, false, true, false, false, true, true, true, true, true, false, false, false, true},
-  {true, false, false, false, false, false, false, false, true, false, false, false, true, false, false, true, false, false, false, true},
-  {true, false, false, false, false, false, false, false, true, false, false, false, true, false, false, true, false, false, false, true},
-  {true, false, false, false, false, true, true, true, true, false, false, false, true, false, false, true, true, false, false, true},
-  {true, false, false, false, false, true, false, false, false, false, false, false, true, false, false, false, false, false, false, true},
-  {true, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, true},
-  {true, false, false, false, false, false, false, false, false, false, false, false, true, false, false, false, false, false, false, true},
-  {true, false, false, false, false, false, false, false, true, false, false, false, true, false, false, false, false, false, false, true},
-  {true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true},
-  {false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false}
+uint8_t occupancyGrid[GRIDSIZE][GRIDSIZE] = {
+  {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
+  {255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255},
+  {255,0,0,0,0,0,0,0,255,0,0,0,255,0,0,0,0,0,0,255},
+  {255,0,0,0,0,0,0,0,0,0,0,0,255,0,0,0,0,0,0,255},
+  {255,0,0,0,0,0,0,0,0,0,0,0,255,0,0,0,0,0,0,255},
+  {255,0,0,0,0,255,0,0,0,0,0,0,255,0,0,0,0,0,0,255},
+  {255,0,0,0,0,255,255,255,255,0,0,0,255,0,0,255,255,0,0,255},
+  {255,0,0,0,0,0,0,0,255,0,0,0,255,0,0,255,0,0,0,255},
+  {255,0,0,0,0,0,0,0,255,0,0,0,255,0,0,255,0,0,0,255},
+  {255,0,0,0,0,0,0,0,255,0,0,255,255,255,255,255,0,0,0,255},
+  {255,0,0,0,0,255,0,0,255,0,0,255,0,0,0,0,0,0,0,255},
+  {255,0,0,0,0,255,0,0,255,0,0,255,0,0,0,0,0,0,0,255},
+  {255,0,0,0,0,255,0,0,0,0,0,255,0,0,0,0,0,0,0,255},
+  {255,255,255,255,255,255,0,0,0,0,0,255,0,0,255,255,255,255,255,255},
+  {255,0,0,0,0,0,0,0,0,0,0,255,0,0,0,0,0,0,0,255},
+  {255,0,0,0,0,0,0,0,255,255,255,255,0,0,0,0,255,0,0,255},
+  {255,0,0,0,0,0,0,0,0,0,0,255,0,0,0,255,255,0,0,255},
+  {255,255,255,0,0,0,0,0,0,0,0,0,0,0,0,0,255,0,0,255},
+  {255,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,255},
+  {255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255}
 };
+
+bool exploredGrid[GRIDSIZE][GRIDSIZE];
 
 Pose currentPose;
 
 
-uint8_t exploreGrid[GRIDSIZE][GRIDSIZE];
-
 void setup()
 {
-  currentPose.x = 8;
-  currentPose.y = 16;
+  currentPose.x = 2;
+  currentPose.y = 4;
   currentPose.heading = EST;
 
-  for (uint8_t x = 0; x < GRIDSIZE; x++)
+  for(uint8_t x = 0; x < GRIDSIZE; x++)
   {
-    for (uint8_t y = 0; y < GRIDSIZE; y++)
+    for(uint8_t y = 0; y < GRIDSIZE; y++)
     {
-      if(occupancyGrid[x][y])
+      if((occupancyGrid[y][x] != OCCUPIED))
       {
-        exploreGrid[x][y] = OCCUPIED;
+        occupancyGrid[y][x] = PLACEHOLDER;
+        exploredGrid[y][x] = false;
       }
       else
       {
-        exploreGrid[x][y] = UNEXPLORED;
-      }      
+        exploredGrid[y][x] = true;
+      }
     }
   }
-  
 
   // Start LCD
   lcd.begin(16, 2);
@@ -166,6 +161,10 @@ void setup()
 
   // Send start command to sim
   PrintMessage("CMD_START");
+  PrintMessage("CMD_ACT_LAT_1_0.5");
+  PrintMessage("CMD_ACT_ROT_0_90");
+  PrintMessage("CMD_ACT_LAT_1_0.5");
+  PrintMessage("CMD_ACT_ROT_1_90");
   // Enable interrupts
   sei();
 
@@ -198,7 +197,7 @@ void loop()
   switch (menuState)
   {
     // Main menu with control mode flashing
-    case MD_START_CON:
+    case MD_START:
       // Print SN and flash con mode
       lcd.setCursor(0, 0);
       lcd.print("12051342");
@@ -213,15 +212,12 @@ void loop()
         {
           // Select goes to con mode
           case SEL_PB:
-            lcd.clear();
-            menuState = MD_CON;
+            // lcd.clear();
+            // menuState = MD_GO;
+            computePath(currentPose.x,currentPose.y, 10, 8);
             break;
-
-          // Down cycles menu
-          case DWN_PB:
-            menuState = MD_START_SWP;
-            break;
-
+          case UP_PB:
+            PrintMessage("CMD_CLOSE");
           default:
             break;
         }
@@ -229,7 +225,7 @@ void loop()
       break;
 
     // Main menu with sweep mode flashing
-    case MD_START_SWP:
+    case MD_GO:
       // Pring SN and flash sweep mode
       lcd.setCursor(0, 0);
       lcd.print("12051342");
@@ -259,220 +255,140 @@ void loop()
         }
       }
       break;
-
-    // Main menu with WF flashing
-    case MD_START_WF:
-      lcd.setCursor(0, 0);
-      lcd.print("12051342");
-      printHelp("", 0, 0);
-      lcd.setCursor(0, 1);
-      printHelp("Main Menu WF", 10, 2);
-
-      // Handle button press
-      if (buttonRead)
-      {
-        switch (buttonVal)
-        {
-          case SEL_PB:
-            // Select, start wall follow procedure
-            // Update menu, then sweep and adjust for 2m gap, then begin following wall
-            break;
-
-          // Down, cycle menu
-          case DWN_PB:
-            menuState = MD_START_NAV;
-            break;
-
-          default:
-            break;
-        }
-      }
-      break;
-
-    // Main menu with Nav flashing
-    case MD_START_NAV:
-      lcd.setCursor(0, 0);
-      lcd.print("12051342");
-      printHelp("", 0, 0);
-      lcd.setCursor(0, 1);
-      printHelp("Main Menu Nav", 10, 3);
-      // Handle button press
-      if (buttonRead)
-      {
-        switch (buttonVal)
-        {
-          // Select, start navigating to goal
-          case SEL_PB:
-            menuState = MD_NAV;
-            lcd.clear();
-            break;
-
-          // Down, navigate menu
-          case DWN_PB:
-            menuState = MD_START_CON;
-            break;
-
-          default:
-            break;
-        }
-      }
-      break;
-
-    // Control mode
-    case MD_CON:
-
-      lcd.setCursor(0, 0);
-      lcd.print("12051342");
-      lcd.setCursor(0, 1);
-      lcd.print("Control");
-      // Handle button press
-      if (buttonRead)
-      {
-        switch (buttonVal)
-        {
-          // Select, go to main menu
-          case SEL_PB:
-            lcd.clear();
-            menuState = MD_START_CON;
-            break;
-
-          // Left and right, rotate bot
-          case LFT_PB:
-            PrintMessage("CMD_ACT_ROT_0_5");
-            break;
-
-          case RIT_PB:
-            PrintMessage("CMD_ACT_ROT_1_5");
-            break;
-
-          // Up and down, move backward and forward
-          case UP_PB:
-            PrintMessage("CMD_ACT_LAT_1_0.5");
-            break;
-
-          case DWN_PB:
-            PrintMessage("CMD_ACT_LAT_0_0.5");
-            break;
-
-          default:
-            break;
-        }
-      }
-      break;
-
-    // Sweep mode
-    case MD_SWP:
-
-      lcd.setCursor(0, 0);
-      lcd.print("12051342");
-      lcd.setCursor(0, 1);
-      lcd.print("Sweep");
-      // Handle button press
-      if (buttonRead)
-      {
-        switch (buttonVal)
-        {
-          // Select returns to start up mode
-          case SEL_PB:
-            lcd.clear();
-            menuState = MD_START_SWP;
-            break;
-
-          // Up, sweep
-          case UP_PB:
-            break;
-
-          default:
-            break;
-        }
-      }
-      break;
-
-    // WF Mode
-    case MD_WF:
-
-      lcd.setCursor(0, 0);
-      lcd.print("12051342");
-      lcd.setCursor(0, 1);
-      lcd.print("Wall follow");
-
-      // Handle button press
-      if (buttonRead)
-      {
-        switch (buttonVal)
-        {
-          // Select returns to main menu
-          case SEL_PB:
-            lcd.clear();
-            menuState = MD_START_WF;
-            break;
-          
-          // Up, stop following wall
-          case UP_PB:
-            break;
-        }
-      }
-      break;
-
-    // Nav Mode
-    case MD_NAV:
-      lcd.setCursor(0, 0);
-      lcd.print("12051342");
-      lcd.setCursor(0, 1);
-      lcd.print("Navigation");
-
-      // Handle button press
-      if (buttonRead)
-      {
-        switch (buttonVal)
-        {
-          // Select, stop navigating and return to main menu
-          case SEL_PB:
-            lcd.clear();
-            menuState = MD_START_NAV;
-            break;
-        }
-      }
-      break;
-
-    // Navigation finished mode
-    case MD_NAV_FIN:
-      lcd.setCursor(0, 0);
-      lcd.print("Finished");
-      lcd.setCursor(0, 1);
-      lcd.print("Navigation");
-      // Handle button press
-      if (buttonRead)
-      {
-        switch (buttonVal)
-        {
-          // Select returns to main menu
-          case SEL_PB:
-            lcd.clear();
-            menuState = MD_START_NAV;
-            break;
-        }
-      }
-      break;
   }
+    
 
   // Buttons have been handled and menu has been updated, set to false to ensure they don't get read again until necessary
   buttonRead = false;
 }
 
-
-void PlanPath(Pose goal, Pose current)
+// Takes the value OF THE ORIGINAL CELL, NOT THE NEIGHBOUR
+void propagateWavefront(uint8_t x, uint8_t y, uint16_t value)
 {
-  uint16_t planGrid[GRIDSIZE][GRIDSIZE];
-  for (uint8_t x = 0; x < GRIDSIZE; x++)
+  if (occupancyGrid[y+1][x] == PLACEHOLDER)
   {
-    for (uint8_t y = 0; y < GRIDSIZE; y++)
+    occupancyGrid[y+1][x] = value + 1;
+  }
+  if (occupancyGrid[y-1][x] == PLACEHOLDER)
+  {
+    occupancyGrid[y-1][x] = value + 1;
+  }
+  if (occupancyGrid[y][x+1] == PLACEHOLDER)
+  {
+    occupancyGrid[y][x+1] = value + 1;
+  }
+  if (occupancyGrid[y][x-1] == PLACEHOLDER)
+  {
+    occupancyGrid[y][x-1] = value + 1;
+  }
+}
+
+void computePath(uint8_t startX, uint8_t startY, uint8_t goalX, uint8_t goalY)
+{
+  uint16_t wavefrontValue = 0;
+  occupancyGrid[goalY][goalX] = wavefrontValue;
+  while (1)
+  {
+    for(uint8_t x = 0; x < GRIDSIZE; x++)
     {
-      if(!occupancyGrid[x][y])
+      for(uint8_t y = 0; y < GRIDSIZE; y++)
       {
-        
+        if(occupancyGrid[y][x] == wavefrontValue)
+        {
+          propagateWavefront(x, y, wavefrontValue);
+        }
       }
     }
+    wavefrontValue++;
+    if (occupancyGrid[startY][startX] != PLACEHOLDER)
+    {
+      // Determine path
+      executePath(startX, startY);
+      // Reset occupancy grid
+      break;
+    }
+    
+  }
+}
+
+void executePath(uint8_t startX, uint8_t startY)
+{
+  uint16_t wavefrontValue = occupancyGrid[startY][startX];
+
+  while(wavefrontValue != 0)
+  {
+    uint16_t heading = checkNeighbours(currentPose.x,currentPose.y,wavefrontValue);
+    Serial.println(heading);
+    moveToNextCell(heading);    
+    wavefrontValue--;
+  }
+}
+
+uint16_t checkNeighbours(uint8_t x, uint8_t y, uint16_t wavefrontValue)
+{
+  Serial.print("Next pose:");
+  if (occupancyGrid[y+1][x] == wavefrontValue - 1)
+  {
+    Serial.print("x:");
+    Serial.println(x+1);
+    Serial.print("y:");
+    Serial.println(y);
+    return NTH;
+  }
+  if (occupancyGrid[y-1][x] == wavefrontValue - 1)
+  {
+    Serial.print("x:");
+    Serial.println(x-1);
+    Serial.print("y:");
+    Serial.println(y);
+    return STH;
+  }
+  if (occupancyGrid[y][x+1] == wavefrontValue - 1)
+  {
+    Serial.print("x:");
+    Serial.println(x);
+    Serial.print("y:");
+    Serial.println(y+1);
+    return EST;
+  }
+  if (occupancyGrid[y][x-1] == wavefrontValue - 1)
+  {
+    Serial.print("x:");
+    Serial.println(x);
+    Serial.print("y:");
+    Serial.println(y-1);
+    return WST;
+  }
+  return 0;
+}
+
+
+void moveToNextCell(uint16_t desiredHeading)
+{
+  Serial.print("DesiredHeading:");
+  Serial.println(desiredHeading);
+  int16_t commandHeading = desiredHeading - currentPose.heading;
+  Serial.print("CommandHeading:");
+  Serial.println(commandHeading);
+  commandString = String("CMD_ACT_ROT_1_" + String(commandHeading));
+  PrintMessage(commandString);
+  currentPose.heading = desiredHeading;
+  PrintMessage("CMD_ACT_LAT_1_1");
+  if(currentPose.heading == NTH)
+  {
+    currentPose.y++;
+  }
+  if(currentPose.heading == STH)
+  {
+    currentPose.y--;
+  }
+  if(currentPose.heading == EST)
+  {
+    currentPose.x++;
+  }
+  if(currentPose.heading == WST)
+  {
+    currentPose.x--;
   }
 }
 
