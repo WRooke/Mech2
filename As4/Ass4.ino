@@ -161,10 +161,10 @@ void setup()
 
   // Send start command to sim
   PrintMessage("CMD_START");
-  PrintMessage("CMD_ACT_LAT_1_0.5");
-  PrintMessage("CMD_ACT_ROT_0_90");
-  PrintMessage("CMD_ACT_LAT_1_0.5");
-  PrintMessage("CMD_ACT_ROT_1_90");
+  // PrintMessage("CMD_ACT_LAT_1_0.5");
+  // PrintMessage("CMD_ACT_ROT_0_90");
+  // PrintMessage("CMD_ACT_LAT_1_0.5");
+  // PrintMessage("CMD_ACT_ROT_1_90");
   // Enable interrupts
   sei();
 
@@ -214,7 +214,7 @@ void loop()
           case SEL_PB:
             // lcd.clear();
             // menuState = MD_GO;
-            computePath(currentPose.x,currentPose.y, 10, 8);
+            computePath(currentPose.x,currentPose.y, 15, 4);
             break;
           case UP_PB:
             PrintMessage("CMD_CLOSE");
@@ -260,6 +260,89 @@ void loop()
 
   // Buttons have been handled and menu has been updated, set to false to ensure they don't get read again until necessary
   buttonRead = false;
+}
+
+void localise()
+{
+  // Ping distance to compass points
+  // Compare sensor distance to "expected" pose and move accordingly
+  float compassDistance[3];
+
+  for(uint8_t count = 0; count < 4; count++)
+  {
+    commandString = String("CMD_SEN_ROT_" + String(count * 90));
+    PrintMessage("CMD_SEN_IR");
+    compassDistance[count] = SerialRead();
+  }
+
+  // ???
+  float northDist;
+  float southDist;
+  float eastDist;
+  float westDist;
+
+  // Ideal distances
+  uint8_t northIdealDist = currentPose.x;
+  uint8_t southIdealDist = currentPose.x;
+  uint8_t eastIdealDist = currentPose.y;
+  uint8_t westIdealDist = currentPose.y;
+
+  // Get ideal distances
+  while((occupancyGrid[currentPose.y][northIdealDist] ! = OCCUPIED) && (northIdealDist < 20))
+  {
+    northIdealDist++;
+  }
+  while((occupancyGrid[currentPose.y][southIdealDist] ! = OCCUPIED) && (southIdealDist > 0))
+  {
+    southIdealDist--;
+  }
+  while((occupancyGrid[eastIdealDist]currentPose.x] ! = OCCUPIED) && (eastIdealDist < 20))
+  {
+    eastIdealDist++;
+  }
+  while((occupancyGrid[westIdealDist][currentPose.x] ! = OCCUPIED) && (westIdealDist > 0))
+  {
+    westIdealDist--;
+  }
+
+
+  // Gotta compare ideals with reals but not fuck up the heading. Maybe get current heading and add multiples of array index on top. If over 360, subtract 360
+
+}
+
+void cumulativeRotate(int16_t angle)
+{
+  float angleStep = 0.5;
+  if(angle == 0)
+  {
+    return;
+  }
+  Serial.print("CumulativeRotate input angle:");
+  Serial.println(angle);
+  bool clockwise = true;
+  if (angle < 0)
+  {
+    Serial.print("angle is negative, new angle:");
+    angle = abs(angle);
+    Serial.println(angle);
+    Serial.print("rotating counterclockwise");
+    // for (int16_t count = 0; count < angle; count += angleStep)
+    for (float count = 0; count < angle; count += angleStep)
+    {
+      commandString = String("CMD_ACT_ROT_0_" + String(angleStep));
+      PrintMessage(commandString);
+    }
+  }
+  else
+  {
+    Serial.print("rotating clockwise");
+    // for (int16_t count = 0; count < angle; count += angleStep)
+    for (float count = 0; count < angle; count += angleStep)
+    {
+      commandString = String("CMD_ACT_ROT_1_" + String(angleStep));
+      PrintMessage(commandString);
+    }
+  }  
 }
 
 // Takes the value OF THE ORIGINAL CELL, NOT THE NEIGHBOUR
@@ -318,7 +401,6 @@ void executePath(uint8_t startX, uint8_t startY)
   while(wavefrontValue != 0)
   {
     uint16_t heading = checkNeighbours(currentPose.x,currentPose.y,wavefrontValue);
-    Serial.println(heading);
     moveToNextCell(heading);    
     wavefrontValue--;
   }
@@ -326,52 +408,39 @@ void executePath(uint8_t startX, uint8_t startY)
 
 uint16_t checkNeighbours(uint8_t x, uint8_t y, uint16_t wavefrontValue)
 {
-  Serial.print("Next pose:");
   if (occupancyGrid[y+1][x] == wavefrontValue - 1)
   {
-    Serial.print("x:");
-    Serial.println(x+1);
-    Serial.print("y:");
-    Serial.println(y);
     return NTH;
   }
   if (occupancyGrid[y-1][x] == wavefrontValue - 1)
   {
-    Serial.print("x:");
-    Serial.println(x-1);
-    Serial.print("y:");
-    Serial.println(y);
     return STH;
   }
   if (occupancyGrid[y][x+1] == wavefrontValue - 1)
   {
-    Serial.print("x:");
-    Serial.println(x);
-    Serial.print("y:");
-    Serial.println(y+1);
     return EST;
   }
   if (occupancyGrid[y][x-1] == wavefrontValue - 1)
   {
-    Serial.print("x:");
-    Serial.println(x);
-    Serial.print("y:");
-    Serial.println(y-1);
     return WST;
   }
   return 0;
 }
 
 
+
 void moveToNextCell(uint16_t desiredHeading)
 {
   Serial.print("DesiredHeading:");
   Serial.println(desiredHeading);
+  Serial.print("CurrentHeading:");
+  Serial.println(currentPose.heading);
   int16_t commandHeading = desiredHeading - currentPose.heading;
   Serial.print("CommandHeading:");
   Serial.println(commandHeading);
-  commandString = String("CMD_ACT_ROT_1_" + String(commandHeading));
-  PrintMessage(commandString);
+  cumulativeRotate(commandHeading);
+  // commandString = String("CMD_ACT_ROT_1_" + String(commandHeading));
+  // PrintMessage(commandString);
   currentPose.heading = desiredHeading;
   PrintMessage("CMD_ACT_LAT_1_1");
   if(currentPose.heading == NTH)
