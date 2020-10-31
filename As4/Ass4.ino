@@ -264,59 +264,230 @@ void loop()
 
 void localise()
 {
+  const uint16_t priorHeading = currentPose.heading;
   // Ping distance to compass points
   // Compare sensor distance to "expected" pose and move accordingly
-  float compassDistance[3];
+  float compassDistance[4];
 
   for(uint8_t count = 0; count < 4; count++)
   {
     commandString = String("CMD_SEN_ROT_" + String(count * 90));
+    PrintMessage(commandString);
     PrintMessage("CMD_SEN_IR");
     compassDistance[count] = SerialRead();
   }
 
-  // ???
-  float northDist;
-  float southDist;
-  float eastDist;
-  float westDist;
-
   // Ideal distances
-  uint8_t northIdealDist = currentPose.x;
-  uint8_t southIdealDist = currentPose.x;
-  uint8_t eastIdealDist = currentPose.y;
-  uint8_t westIdealDist = currentPose.y;
+  int8_t northWall = currentPose.y + 1;
+  int8_t southWall = currentPose.y - 1;
+  int8_t eastWall = currentPose.x + 1;
+  int8_t westWall = currentPose.x - 1;
 
-  // Get ideal distances
-  while((occupancyGrid[currentPose.y][northIdealDist] ! = OCCUPIED) && (northIdealDist < 20))
+  Serial.print("current pose x:");
+  Serial.println(currentPose.x);
+  Serial.print("current pose y");
+  Serial.println(currentPose.y);
+
+  float northDist = FLT_MAX;
+  float southDist = FLT_MAX;
+  float eastDist = FLT_MAX;
+  float westDist = FLT_MAX;
+
+  // Get wall locations
+  while((occupancyGrid[northWall][currentPose.x] != OCCUPIED) && (northWall < 20))
   {
-    northIdealDist++;
+    northWall++;
   }
-  while((occupancyGrid[currentPose.y][southIdealDist] ! = OCCUPIED) && (southIdealDist > 0))
+  while((occupancyGrid[southWall][currentPose.x] != OCCUPIED) && (southWall > 0))
   {
-    southIdealDist--;
+    southWall--;
   }
-  while((occupancyGrid[eastIdealDist]currentPose.x] ! = OCCUPIED) && (eastIdealDist < 20))
+  while((occupancyGrid[currentPose.y][eastWall] != OCCUPIED) && (eastWall < 20))
   {
-    eastIdealDist++;
+    eastWall++;
   }
-  while((occupancyGrid[westIdealDist][currentPose.x] ! = OCCUPIED) && (westIdealDist > 0))
+  while((occupancyGrid[currentPose.y][westWall] != OCCUPIED) && (westWall > 0))
   {
-    westIdealDist--;
+    westWall--;
   }
 
+  Serial.print("grid locatiopn of north wall:");
+  Serial.println(northWall);
+  Serial.print("grid locatiopn of south wall:");
+  Serial.println(southWall);
+  Serial.print("grid locatiopn of east wall:");
+  Serial.println(eastWall);
+  Serial.print("grid locatiopn of west wall:");
+  Serial.println(westWall);
+
+  northWall = abs(currentPose.y - northWall);
+  southWall = abs(currentPose.y - southWall - 1);
+  eastWall = abs(currentPose.x - eastWall);
+  westWall = abs(currentPose.x - westWall - 1);
+
+
+  Serial.print("ideal metres to north wall:");
+  Serial.println(northWall);
+  Serial.print("ideal metres to south wall:");
+  Serial.println(southWall);
+  Serial.print("ideal metres to east wall:");
+  Serial.println(eastWall);
+  Serial.print("ideal metres to west wall:");
+  Serial.println(westWall);
 
   // Gotta compare ideals with reals but not fuck up the heading. Maybe get current heading and add multiples of array index on top. If over 360, subtract 360
 
+  uint16_t currentHeading = currentPose.heading;
+
+  if (currentHeading == NTH)
+  {
+    northDist = compassDistance[0];
+    westDist = compassDistance[1];
+    southDist = compassDistance[2];
+    eastDist = compassDistance[3];
+  }
+
+  if (currentHeading == WST)
+  {
+    westDist = compassDistance[0];
+    southDist = compassDistance[1];
+    eastDist = compassDistance[2];
+    northDist = compassDistance[3];
+  }
+
+  if (currentHeading == STH)
+  {
+    southDist = compassDistance[0];
+    eastDist = compassDistance[1];
+    northDist = compassDistance[2];
+    westDist = compassDistance[3];
+  }
+
+  if (currentHeading == EST)
+  {
+    eastDist = compassDistance[0];
+    northDist = compassDistance[1];
+    westDist = compassDistance[2];
+    southDist = compassDistance[3];
+  }
+
+
+  Serial.print("measured metres to north wall:");
+  Serial.println(northDist);
+  Serial.print("measured metres to south wall:");
+  Serial.println(southDist);
+  Serial.print("measured metres to east wall:");
+  Serial.println(eastDist);
+  Serial.print("measured metres to west wall:");
+  Serial.println(westDist);
+
+  if (northDist != FLT_MAX)
+  {
+    northDist = northDist - (float)northWall;
+    if (northDist > 0.2)
+    {
+      Serial.print("difference between pose and north wall");
+      Serial.println(northDist);
+      cumulativeRotate(NTH);
+      Serial.println("moving");
+      commandString = String("CMD_ACT_LAT_1_" + String(northDist));
+      PrintMessage(commandString);
+      cumulativeRotate(priorHeading);
+    }
+    else if (northDist < -0.2)
+    {
+      Serial.print("difference between pose and north wall");
+      Serial.println(northDist);
+      cumulativeRotate(NTH);
+      Serial.println("moving");
+      commandString = String("CMD_ACT_LAT_0_" + String(fabs(northDist)));
+      PrintMessage(commandString);
+      cumulativeRotate(priorHeading);
+    }
+  }
+  else if (southDist != FLT_MAX)
+  {
+    southDist = southDist - (float)southWall;
+    if (southDist > 0.2)
+    {
+      Serial.print("difference between pose and south wall");
+      Serial.println(southDist);
+      cumulativeRotate(STH);
+      Serial.println("moving");
+      commandString = String("CMD_ACT_LAT_0_" + String(southDist));
+      PrintMessage(commandString);
+      cumulativeRotate(priorHeading);
+    }
+    else if (southDist < -0.2)
+    {
+      Serial.print("difference between pose and south wall");
+      Serial.println(southDist);
+      cumulativeRotate(STH);
+      Serial.println("moving");
+      commandString = String("CMD_ACT_LAT_1_" + String(fabs(southDist)));
+      PrintMessage(commandString);
+      cumulativeRotate(priorHeading);
+    }
+  }
+  if (eastDist != FLT_MAX)
+  {
+    eastDist = eastDist - (float)eastWall;
+    if (eastDist > 0.2)
+    {
+      Serial.print("difference between pose and east wall");
+      Serial.println(eastDist);
+      cumulativeRotate(EST);
+      Serial.println("moving");
+      commandString = String("CMD_ACT_LAT_0_" + String(eastDist));
+      PrintMessage(commandString);
+      cumulativeRotate(priorHeading);
+    }
+    else if (eastDist < -0.2)
+    {
+      Serial.print("difference between pose and east wall");
+      Serial.println(eastDist);
+      cumulativeRotate(EST);
+      Serial.println("moving");
+      commandString = String("CMD_ACT_LAT_1_" + String(fabs(eastDist)));
+      PrintMessage(commandString);
+      cumulativeRotate(priorHeading);
+    }
+  }
+  else if (westDist != FLT_MAX)
+  {
+    westDist = westDist - (float)westWall;
+    if (westDist > 0.2)
+    {
+      Serial.print("difference between pose and west wall");
+      Serial.println(westDist);
+      cumulativeRotate(WST);
+      Serial.println("moving");
+      commandString = String("CMD_ACT_LAT_0_" + String(westDist));
+      PrintMessage(commandString);
+      cumulativeRotate(priorHeading);
+    }
+    else if (westDist < -0.2)
+    {
+      Serial.print("difference between pose and west wall");
+      Serial.println(westDist);
+      cumulativeRotate(WST);
+      Serial.println("moving");
+      commandString = String("CMD_ACT_LAT_1_" + String(fabs(westDist)));
+      PrintMessage(commandString);
+      cumulativeRotate(priorHeading);
+    }
+  }
 }
 
-void cumulativeRotate(int16_t angle)
+void cumulativeRotate(uint16_t desiredHeading)
 {
-  float angleStep = 0.5;
+  int16_t angle = desiredHeading - currentPose.heading;
+  uint8_t angleStep = 1;
   if(angle == 0)
   {
     return;
   }
+
   Serial.print("CumulativeRotate input angle:");
   Serial.println(angle);
   bool clockwise = true;
@@ -342,7 +513,8 @@ void cumulativeRotate(int16_t angle)
       commandString = String("CMD_ACT_ROT_1_" + String(angleStep));
       PrintMessage(commandString);
     }
-  }  
+  }
+  currentPose.heading = desiredHeading;  
 }
 
 // Takes the value OF THE ORIGINAL CELL, NOT THE NEIGHBOUR
@@ -438,10 +610,9 @@ void moveToNextCell(uint16_t desiredHeading)
   int16_t commandHeading = desiredHeading - currentPose.heading;
   Serial.print("CommandHeading:");
   Serial.println(commandHeading);
-  cumulativeRotate(commandHeading);
+  cumulativeRotate(desiredHeading);
   // commandString = String("CMD_ACT_ROT_1_" + String(commandHeading));
   // PrintMessage(commandString);
-  currentPose.heading = desiredHeading;
   PrintMessage("CMD_ACT_LAT_1_1");
   if(currentPose.heading == NTH)
   {
@@ -459,6 +630,7 @@ void moveToNextCell(uint16_t desiredHeading)
   {
     currentPose.x--;
   }
+  localise();
 }
 
 // Function for finding bearing and distance of goal from 2 distance readings
