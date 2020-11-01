@@ -113,13 +113,30 @@ Pose currentPose;
 
 const Pose startingPose = {.x = 2, .y = 4, .heading = EST};
 
-Pose waterGoalPos;
-Pose waterGoalNeg;
-Pose fireGoalPos;
-Pose fireGoalNeg;
+Pose waterGoal;
+Pose fireGoal;
+
+Pose tempGoalPos;
+Pose tempGoalNeg;
+
+Pose exploreGoal;
+Pose currentGoal;
+
+uint16_t quadrant = EST;
 
 bool pathReady = false;
+bool checkPosGoal = false;
+bool checkNegGoal = false;
+bool waterFound = false;
+bool fireFound = false;
+bool fireExtinguished = false;
+bool explore = false;;
 
+float tempDist = 0;
+float goalDistA = 0;
+float goalDistB = 0;
+float pingVal = 0;
+uint8_t goalID = 0;
 
 uint16_t executionWavefrontValue;
 
@@ -214,7 +231,8 @@ void loop()
           case SEL_PB:
             // lcd.clear();
             // menuState = MD_GO;
-            computePath(currentPose.x,currentPose.y, 15, 4);
+            // computePath(currentPose.x, currentPose.y, 3, 10);
+            explore = true;
             break;
           case UP_PB:
             PrintMessage("CMD_CLOSE");
@@ -261,8 +279,36 @@ void loop()
   // Buttons have been handled and menu has been updated, set to false to ensure they don't get read again until necessary
   buttonRead = false;
 
-  if (pathReady)
+  PrintMessage("CMD_SEN_GOAL");
+  if (SerialRead() == 2)
   {
+    stopPath();
+    fireExtinguished;
+    explore = false;
+  }
+
+  if (!pathReady)
+  {
+   if (waterFound && fireFound && !fireExtinguished)
+    {
+      currentGoal = fireGoal;
+      computePath(currentPose.x, currentPose.y, currentGoal.x, currentGoal.y);
+    }
+    else if (fireExtinguished)
+    {
+      currentGoal = startingPose;
+      computePath(currentPose.x, currentPose.y, currentGoal.x, currentGoal.y);
+    }
+    else if (explore)
+    {
+      currentGoal = findNewCell();
+      computePath(currentPose.x, currentPose.y, currentGoal.x, currentGoal.y);
+    }
+  }
+
+
+  if (pathReady)
+  {    
     executionWavefrontValue = occupancyGrid[currentPose.y][currentPose.x];
 
     if(executionWavefrontValue != 0)
@@ -271,16 +317,85 @@ void loop()
       moveToNextCell(heading);    
       executionWavefrontValue--;
     }
+
     if (executionWavefrontValue == 0)
     {
-      pathReady = false;
-      cumulativeRotate(EST);
-      PrintMessage("CMD_ACT_LAT_0_0.5");
-      cumulativeRotate(NTH);
-      PrintMessage("CMD_ACT_LAT_0_0.5");
-      clearGrid();
+      stopPath();
+      if (fireExtinguished)
+      {
+        PrintMessage("CMD_CLOSE");
+      }
+    }
+
+    if (explore)
+    {
+      PrintMessage("CMD_SEN_PING");
+      tempDist = SerialRead();
+      if (tempDist != 0)
+      {
+        if (tempDist < 0.5)
+        {
+          PrintMessage("CMD_SEN_ID");
+          goalID = SerialRead();
+          if (goalID == 1)
+          {
+            waterGoal = currentPose;
+            waterFound = true;
+            stopPath();
+          }
+          else if (goalID == 2)
+          {
+            fireGoal = currentPose;
+            fireFound = true;
+            stopPath();
+            if (waterFound)
+            {
+              fireExtinguished = true;
+            }
+          }
+        }
+        else if ((tempDist > 0.5) && (tempDist < 0.7))
+        {
+          if (goalDistA == 0)
+          {
+            goalDistA = tempDist;
+          }
+          else
+          {
+            PrintMessage("CMD_SEN_ID");
+            goalID = SerialRead();
+            if (goalID == 1)
+            {
+              waterGoal = currentPose;
+              waterFound = true;
+              stopPath();
+            }
+            else if (goalID == 2)
+            {
+              fireGoal = currentPose;
+              fireFound = true;
+              stopPath();
+              if (waterFound)
+              {
+                fireExtinguished = true;
+              }
+            }
+          }
+        }
+      }
     }
   }
+}
+
+void stopPath()
+{
+  executionWavefrontValue = 0;
+  pathReady = false;
+  cumulativeRotate(EST);
+  PrintMessage("CMD_ACT_LAT_0_0.5");
+  cumulativeRotate(NTH);
+  PrintMessage("CMD_ACT_LAT_0_0.5");
+  clearGrid();
 }
 
 void localise()
@@ -307,19 +422,19 @@ void localise()
   float westDist = FLT_MAX;
 
   // Get wall locations
-  while((occupancyGrid[northWall][currentPose.x] != OCCUPIED) && (northWall < 20))
+  while((occupancyGrid[northWall][currentPose.x - 1] != OCCUPIED) && (northWall < 20))
   {
     northWall++;
   }
-  while((occupancyGrid[southWall][currentPose.x] != OCCUPIED) && (southWall > 0))
+  while((occupancyGrid[southWall][currentPose.x - 1] != OCCUPIED) && (southWall > 0))
   {
     southWall--;
   }
-  while((occupancyGrid[currentPose.y][eastWall] != OCCUPIED) && (eastWall < 20))
+  while((occupancyGrid[currentPose.y - 1][eastWall] != OCCUPIED) && (eastWall < 20))
   {
     eastWall++;
   }
-  while((occupancyGrid[currentPose.y][westWall] != OCCUPIED) && (westWall > 0))
+  while((occupancyGrid[currentPose.y - 1][westWall] != OCCUPIED) && (westWall > 0))
   {
     westWall--;
   }
@@ -365,14 +480,14 @@ void localise()
   if (northDist != FLT_MAX)
   {
     northDist = northDist - (float)northWall + 0.5;
-    if (northDist > 0.2)
+    if (northDist > 0.2 && northDist < 1)
     {
       cumulativeRotate(NTH);
       commandString = String("CMD_ACT_LAT_1_" + String(northDist));
       PrintMessage(commandString);
       cumulativeRotate(priorHeading);
     }
-    else if (northDist < -0.2)
+    else if (northDist < -0.2 && northDist > -1)
     {
       cumulativeRotate(NTH);
       commandString = String("CMD_ACT_LAT_0_" + String(fabs(northDist)));
@@ -383,14 +498,14 @@ void localise()
   else if (southDist != FLT_MAX)
   {
     southDist = southDist - (float)southWall - 0.5;
-    if (southDist > 0.2)
+    if (southDist > 0.2 && southDist < 1)
     {
       cumulativeRotate(STH);
       commandString = String("CMD_ACT_LAT_1_" + String(southDist));
       PrintMessage(commandString);
       cumulativeRotate(priorHeading);
     }
-    else if (southDist < -0.2)
+    else if (southDist < -0.2 && southDist > -1)
     {
       cumulativeRotate(STH);
       commandString = String("CMD_ACT_LAT_0_" + String(fabs(southDist)));
@@ -401,14 +516,14 @@ void localise()
   if (eastDist != FLT_MAX)
   {
     eastDist = eastDist - (float)eastWall + 0.5;
-    if (eastDist > 0.2)
+    if (eastDist > 0.2 && eastDist < 1)
     {
       cumulativeRotate(EST);
       commandString = String("CMD_ACT_LAT_1_" + String(eastDist));
       PrintMessage(commandString);
       cumulativeRotate(priorHeading);
     }
-    else if (eastDist < -0.2)
+    else if (eastDist < -0.2 && eastDist > -1)
     {
       cumulativeRotate(EST);
       commandString = String("CMD_ACT_LAT_0_" + String(fabs(eastDist)));
@@ -419,14 +534,14 @@ void localise()
   else if (westDist != FLT_MAX)
   {
     westDist = westDist - (float)westWall - 0.5;
-    if (westDist > 0.2)
+    if (westDist > 0.2 && westDist < 1)
     {
       cumulativeRotate(WST);
       commandString = String("CMD_ACT_LAT_1_" + String(westDist));
       PrintMessage(commandString);
       cumulativeRotate(priorHeading);
     }
-    else if (westDist < -0.2)
+    else if (westDist < -0.2 && westDist > -1)
     {
       cumulativeRotate(WST);
       commandString = String("CMD_ACT_LAT_0_" + String(fabs(westDist)));
@@ -439,12 +554,11 @@ void localise()
 void cumulativeRotate(uint16_t desiredHeading)
 {
   int16_t angle = desiredHeading - currentPose.heading;
-  uint8_t angleStep = 3;
+  uint8_t angleStep = 2;
   if(angle == 0)
   {
     return;
   }
-  Serial.println(angle);
   bool clockwise = true;
   if (angle < 0)
   {
@@ -457,7 +571,6 @@ void cumulativeRotate(uint16_t desiredHeading)
   }
   else
   {
-    // for (int16_t count = 0; count < angle; count += angleStep)
     for (float count = 0; count < angle; count += angleStep)
     {
       commandString = String("CMD_ACT_ROT_1_" + String(angleStep));
@@ -518,12 +631,6 @@ void computePath(uint8_t startX, uint8_t startY, uint8_t goalX, uint8_t goalY)
   }
 }
 
-void executePath()
-{
- 
-  
-}
-
 void clearGrid(void)
 {
   for (uint8_t x = 0; x < GRIDSIZE; x++)
@@ -559,6 +666,51 @@ uint16_t checkNeighbours(uint8_t x, uint8_t y, uint16_t wavefrontValue)
   return 0;
 }
 
+Pose findNewCell()
+{
+  uint8_t x;
+  uint8_t y;
+  Pose newCell;
+  if(quadrant == NTH)
+  {
+    x = 1;
+    y = 10;
+    quadrant = EST;
+  }
+  else if(quadrant == EST)
+  {
+    x = 10;
+    y = 10;
+    quadrant = STH;
+  }
+  else if(quadrant == STH)
+  {
+    x = 10;
+    y = 1;
+    quadrant = WST;
+  }
+  else if(quadrant == WST)
+  {
+    x = 0;
+    y = 1;
+    quadrant = NTH;
+  }
+  for (uint8_t xCount = x; xCount < x + 10; xCount++)
+  {
+    for (uint8_t yCount = x; yCount < y + 10; yCount++)
+    {
+      if (yCount > 1 && yCount < 20 && xCount > 1 && xCount < 20)
+      {
+        if (!exploredGrid[yCount][xCount])
+        {
+          newCell.x = xCount;
+          newCell.y = yCount;
+          return newCell;
+        }
+      }
+    }
+  }
+}
 
 float readIRSensor()
 {
@@ -610,102 +762,67 @@ void moveToNextCell(uint16_t desiredHeading)
   {
     currentPose.x--;
   }
+  exploredGrid[currentPose.y][currentPose.x] = true;
   localise();
 }
 
 // Function for finding bearing and distance of goal from 2 distance readings
 // Used trilateration to find the goal
-void FindGoal(float distanceA, float distanceB, uint8_t goalID)
+Pose FindGoal(float distanceA, float distanceB, bool positive)
 {
-  // Ensure distanceA is always greater than distanceB
-  // Helped with some weird angle NaN errors
+  Pose goalPose;
+
   if (distanceB > distanceA)
   {
     float temp = distanceB;
     distanceB = distanceA;
     distanceA = temp;
   }
-
+  
   // Find X and Y coordinates
   // Formulae from https://en.wikipedia.org/wiki/True-range_multilateration#Two_Cartesian_dimensions,_two_measured_slant_ranges_(Trilateration)
   // This method gives two "points of interest" (POIs) at (x,y) and (x,-y) so both must be checked
-  float x = (pow(distanceA, 2) - pow(distanceB, 2) + pow(0.5, 2)) / (2 * 0.5);
+  float x = (pow(distanceA, 2) - pow(distanceB, 2) + pow(1, 2)) / (2 * 1);
   float y = sqrt(pow(distanceA, 2) - (pow(x, 2)));
   
   // If y is NaN, abort function to avoid crashes
   if (y != y)
   {
-    return;
+    goalPose = currentPose;
+    return goalPose;
   }
-
   // Check if goal is in valid region
-  uint8_t goalX = currentPose.x + (uint8_t)round(x);
-  uint8_t goalYPos = currentPose.y + (int8_t)round(y);
-  uint8_t goalYNeg = currentPose.y + (int8_t)round(y);
+  uint8_t goalX = currentPose.x + (uint8_t)ceil(x);
+  uint8_t goalYPos = currentPose.y + (int8_t)ceil(y);
+  uint8_t goalYNeg = currentPose.y - (int8_t)ceil(y);
 
-  if(occupancyGrid[goalYPos][goalX] != OCCUPIED)
+  if ((goalX > 20) || (goalYPos > 20) || (goalYNeg > 20))
   {
-    if (goalID == 1)
-    {
-      waterGoalPos.x = goalX;
-      waterGoalPos.y = goalYPos;
-    }
-    else if (goalID == 2)
-    {
-      fireGoalPos.x = goalX;
-      fireGoalPos.y = goalYPos;
-    }
+    goalPose = currentPose;
+    return goalPose;
   }
 
-  if(occupancyGrid[goalYNeg][goalX] != OCCUPIED)
+  if((occupancyGrid[goalYPos][goalX] != OCCUPIED) && positive)
   {
-    if (goalID == 1)
-    {
-      waterGoalNeg.x = goalX;
-      waterGoalNeg.y = goalYNeg;
-    }
-    else if (goalID == 2)
-    {
-      fireGoalNeg.x = goalX;
-      fireGoalNeg.y = goalYNeg;
-    }
+    goalPose.x = goalX;
+    goalPose.y = goalYPos;
+    goalPose.heading = 0;
+    return goalPose; 
   }
+  else if((occupancyGrid[goalYNeg][goalX] != OCCUPIED) && !positive)
+  {
+      goalPose.x = goalX;
+      goalPose.y = goalYNeg;
+      goalPose.heading = 0;
+      return goalPose;  
+  }
+  else
+  {
+    goalPose = currentPose;
+    return goalPose;
+  }
+  
 
-
-
-  // // Rotate to first POI and move to it
-  // commandString = String("CMD_ACT_ROT_0_" + String(GoalAngle));
-  // PrintMessage(commandString);
-  // commandString = String("CMD_ACT_LAT_1_" + String(goalRange));
-  // PrintMessage(commandString);
-
-  // // Ping goal distance, if it isn't 0 and within 0.5m, consider it found and stop navigating
-  // PrintMessage("CMD_SEN_PING");
-  // float findGoalDist = SerialRead();
-  // if ((findGoalDist <= 0.5) && (findGoalDist > 0))
-  // {
-  //   menuState = MD_NAV_FIN;
-  // }
-
-  // // If the goal was not at the first POI, check the second by moving back to the initial point,
-  // // rotating 2x the initial angle in the opposite direction, and moving towards the second POI
-  // else
-  // {
-  //   commandString = String("CMD_ACT_LAT_0_" + String(goalRange));
-  //   PrintMessage(commandString);
-  //   commandString = String("CMD_ACT_ROT_1_" + String(2 * GoalAngle));
-  //   PrintMessage(commandString);
-  //   commandString = String("CMD_ACT_LAT_1_" + String(goalRange));
-  //   PrintMessage(commandString);
-
-  //   // Ping goal distance, if it isn't 0 and within 0.5m, consider it found and stop navigating
-  //   PrintMessage("CMD_SEN_PING");
-  //   findGoalDist = SerialRead();
-  //   if ((findGoalDist <= 0.5) && (findGoalDist > 0))
-  //   {
-  //     menuState = MD_NAV_FIN;
-  //   }
-  // }
 }
 
 // Reads from the serial port and puts the read value into float form
